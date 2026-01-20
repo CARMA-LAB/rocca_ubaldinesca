@@ -13,53 +13,47 @@
   <link rel="stylesheet" href="./libs/spectrum/spectrum.css">
   <link rel="stylesheet" href="./libs/jstree/themes/mixed/style.css">
 
-  <!-- FIX: annotation box semi-transparent (rgba) but image fully opaque -->
+  <!-- IMAGE SPOTLIGHT – acts ONLY on the image (keeps Potree annotation defaults) -->
   <style>
-    /* 1) Ensure annotations are not globally faded by parent opacity/filter */
-    .potree_annotation,
-    .annotation,
-    .annotation-content,
-    .potree_annotation_content,
-    .annotation-description,
-    .ui-dialog .ui-dialog-content {
-      opacity: 1 !important;
-      filter: none !important;
-      backdrop-filter: none !important;
+    .ap-spotlight-wrap{
+      position: relative;
+      margin: 8px 0;
+      border-radius: 10px;
+      overflow: hidden;
+      z-index: 2;
     }
 
-    /* 2) If any overlay pseudo-element is used, disable it */
-    .potree_annotation::before,
-    .annotation::before,
-    .annotation-content::before,
-    .potree_annotation_content::before,
-    .annotation-description::before {
-      content: none !important;
-      opacity: 0 !important;
-      background: transparent !important;
-    }
+    img.ap-spotlight{
+      display: block;
+      width: 100%;
+      height: auto;
 
-    /* 3) Apply semi-transparent background WITHOUT reducing children opacity */
-    .potree_annotation,
-    .annotation,
-    .annotation-content,
-    .potree_annotation_content,
-    .annotation-description {
-      background: rgba(20, 20, 20, 0.78) !important; /* box transparency */
-      color: #fff !important;
-      border: 1px solid rgba(255, 255, 255, 0.12) !important;
-      border-radius: 10px !important;
-    }
-
-    /* 4) Force images inside annotations to remain fully opaque and sharp */
-    .potree_annotation img,
-    .annotation img,
-    .annotation-content img,
-    .potree_annotation_content img,
-    .annotation-description img {
+      /* ensure the image is not visually attenuated by filters/blends */
       opacity: 1 !important;
       filter: none !important;
       mix-blend-mode: normal !important;
       -webkit-filter: none !important;
+
+      border-radius: 10px;
+      box-shadow:
+        0 10px 24px rgba(0,0,0,0.35),
+        0 0 0 1px rgba(255,255,255,0.18);
+
+      transform: translateZ(0);
+    }
+
+    .ap-spotlight-wrap::after{
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(
+        135deg,
+        rgba(255,255,255,0.16) 0%,
+        rgba(255,255,255,0.06) 20%,
+        rgba(255,255,255,0.00) 55%,
+        rgba(255,255,255,0.00) 100%
+      );
     }
   </style>
 </head>
@@ -94,7 +88,7 @@
     // LABELS
     // =====================
     const SASSO_LABEL = "Rocca Ubaldinesca";
-    const BUSTO_LABEL = "Busto di Francesco di Giorgio Martini";
+    const BUSTO_LABEL = "Focus 1";
 
     // =====================
     // VIEWER
@@ -281,6 +275,7 @@
     let fitFinalDone = false;
 
     function tryInitialFit(){
+      // If user activated a "special view", do not overwrite it with fitToScreen
       if (specialViewActive) return;
 
       if (!fitQuickDone && bustoLoaded && tilesLoaded >= 1) {
@@ -400,9 +395,11 @@
     // ANNOTATION + VIEW-DEPENDENT SETTINGS
     // =====================
 
-    const SAVED_POS_ARR = [298466.397, 4850600.337, 331.066];
-    const SAVED_TGT_ARR = [298465.821, 4850599.263, 330.926];
+    // Your saved camera view (arrays, like Potree examples)
+    const SAVED_POS_ARR = [298466.300, 4850599.934, 331.354];
+    const SAVED_TGT_ARR = [298465.887, 4850599.271, 330.000];
 
+    // Distance threshold to restore defaults
     const RESTORE_DISTANCE_M = 5.0;
 
     function setRoccaSpecial(){
@@ -458,9 +455,11 @@
     }
 
     function goToSavedView(){
+      // stop any future auto-fit overwriting the user-selected view
       fitQuickDone = true;
       fitFinalDone = true;
 
+      // Use Potree's native method (robust: updates pivot + controls correctly)
       viewer.scene.view.setView(SAVED_POS_ARR, SAVED_TGT_ARR);
 
       setRoccaSpecial();
@@ -470,6 +469,7 @@
       viewer.render();
     }
 
+    // Annotation: include cameraPosition/cameraTarget like in the reference example
     const ann = new Potree.Annotation({
       title: BUSTO_LABEL,
       position: SAVED_TGT_ARR,
@@ -484,33 +484,39 @@
           <div style="margin-bottom:8px;">
             <p style="margin:0 0 6px 0;">
               Busto attribuito a <b>Francesco di Giorgio Martini</b>, inserito nel percorso monumentale della Rocca Ubaldinesca di Sassocorvaro.
-              Il rilievo fotogrammetrico di dettaglio eseguito consente l’analisi formale e materica dell’opera in ambiente digitale.
+              Il rilievo fotogrammetrico di dettaglio eseguito consente l’analisi formale e materica
+              dell’opera in ambiente digitale.
             </p>
           </div>
 
-          <img
-            src="./resources/images/busto.jpeg"
-            alt="Busto di Francesco di Giorgio Martini"
-            style="width:100%; height:auto; border-radius:8px; display:block; margin:8px 0;"
-          />
+          <div class="ap-spotlight-wrap">
+            <img
+              class="ap-spotlight"
+              src="./resources/images/busto.jpeg"
+              alt="Busto di Francesco di Giorgio Martini"
+            />
+          </div>
 
           <div style="font-size:12px;">
             Fotografia del busto.
           </div>
 
           <div style="margin-top:6px; font-size:12px;">
-            Clicca sull’annotazione per attivare il punto di vista dedicato.
+            Clicca due volte sull’annotazione per attivare una migliore visualizzazione.
           </div>
         </div>
       `
     });
 
+    // Add to annotation root (robust across builds)
     viewer.scene.annotations.add(ann);
 
+    // Optional: force the view also via handler (some builds handle click internally, but we keep it deterministic)
     ann.addEventListener("select", () => goToSavedView());
     ann.addEventListener("click",  () => goToSavedView());
     ann.onClick = () => goToSavedView();
 
+    // Restore defaults if user moves away from saved target > 5m
     const SAVED_TGT_VEC = new THREE.Vector3(...SAVED_TGT_ARR);
 
     setInterval(() => {
@@ -525,6 +531,9 @@
       }
     }, 500);
 
+    // =====================
+    // Optional helpers
+    // =====================
     window.showBoth = () => {
       SASSOCORVARO.pcs.forEach(pc => pc.visible = true);
       if (BUSTO.pc) BUSTO.pc.visible = true;
